@@ -776,7 +776,8 @@ h1, h2 { margin: 0; text-wrap: balance; }
         status(`Downloaded ${esc(name)}. Saving a copy to the church Drive…`); progress(0.85);
         try {
           const r = await apiPost({ action: "save", filename: name, data: bytesToB64(bytes), summary: summary(), preparedBy: $("#prepared-by").value.trim() });
-          status(`Done. ${esc(name)} is downloaded and <a href="${esc(r.url)}" target="_blank" rel="noopener">saved to the church Drive</a>, and a notification was sent.${esc(note)}`, "ok");
+          const mail = r.notified ? ` A notification was emailed to ${esc(r.notified)}.` : r.notifyError ? ` No notification was emailed: ${esc(r.notifyError)}.` : "";
+          status(`Done. ${esc(name)} is downloaded and <a href="${esc(r.url)}" target="_blank" rel="noopener">saved to the church Drive</a>.${mail}${esc(note)}`, r.notifyError ? "err" : "ok");
         } catch (e) {
           status(`${esc(name)} is downloaded, but saving to the church Drive didn't work (${esc(e.message)}). Send the file on by hand this time.${esc(note)}`, "err");
         }
