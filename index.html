@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Service Builder · CNCOC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Caslon+Text:wght@400;700&family=Oswald:wght@500&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap">
+<style>
+/* Two-pane workbench: hymnal/chorus search + service slides on the left, the order of service on the
+   right, topped by a hymn board. On phones the panes become two views switched from a bottom bar. */
+:root {
+  --paper: #f4f5f8; --surface: #ffffff; --sunk: #eceef3; --ink: #1c2130; --muted: #5d6476; --line: #d9dce4;
+  --cloth: #6e1e2b; --cloth-ink: #ffffff; --cloth-soft: #f4e7e9; --gilt: #9a7425;
+  --board: #231c17; --board-ink: #f1e9d8; --ok: #2f6b45; --warn: #9a5a00; --warn-soft: #fbf0de; --focus: #2f5fd0;
+  --shadow: 0 1px 2px rgba(28, 33, 48, .06), 0 2px 8px rgba(28, 33, 48, .06);
+  --f-display: "Libre Caslon Text", Georgia, "Times New Roman", serif;
+  --f-body: "Source Sans 3", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-board: "Oswald", "Arial Narrow", Impact, sans-serif;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #111318; --surface: #1a1d24; --sunk: #14161c; --ink: #e7e9ef; --muted: #9ba2b3; --line: #2c313c;
+    --cloth: #d47784; --cloth-ink: #1a0d10; --cloth-soft: #3a2027; --gilt: #d6b46a; --board: #0c0a09; --board-ink: #efe5cf;
+    --ok: #79c495; --warn: #e2a64d; --warn-soft: #33270f; --focus: #8fb0ff; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 2px 10px rgba(0,0,0,.3);
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink); font: 400 15px/1.45 var(--f-body);
+  padding: 16px max(16px, env(safe-area-inset-right)) 32px max(16px, env(safe-area-inset-left));
+}
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+h1, h2 { margin: 0; text-wrap: balance; }
+[hidden] { display: none !important; }
+.app { max-width: 1280px; margin: 0 auto; display: grid; gap: 14px; }
+
+/* Header */
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; min-width: 0; }
+.brand h1 { font: 700 1.5rem/1.1 var(--f-display); letter-spacing: -.01em; }
+.brand span { color: var(--muted); font-size: .9rem; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.seg { display: inline-flex; background: var(--sunk); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+.seg button { border: 0; background: none; padding: 6px 14px; border-radius: 999px; cursor: pointer; font-weight: 600; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.field-date { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: .9rem; }
+.field-date input { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 14px; cursor: pointer; font-weight: 600; min-height: 40px; }
+.btn:hover { border-color: var(--muted); }
+.btn-primary { background: var(--cloth); color: var(--cloth-ink); border-color: var(--cloth); }
+.btn-primary:hover { filter: brightness(1.08); border-color: var(--cloth); }
+.btn-primary[disabled] { opacity: .6; cursor: progress; }
+
+/* Unlock screen */
+.gate { max-width: 440px; margin: 12vh auto 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 24px; display: grid; gap: 14px; box-shadow: var(--shadow); }
+.gate h1 { font: 700 1.6rem/1.15 var(--f-display); }
+.gate p { margin: 0; color: var(--muted); }
+.gate form { display: flex; gap: 8px; flex-wrap: wrap; }
+.gate input { flex: 1 1 200px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font-size: 1rem; }
+.gate .err { color: var(--warn); font-weight: 600; }
+
+/* Workbench */
+.work { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 16px; align-items: start; }
+.pane { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 12px; min-width: 0; }
+.pane-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.pane h2 { font: 700 1.05rem/1.2 var(--f-display); }
+.label { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+.tabs button { border: 0; background: none; padding: 8px 12px; font: 700 1rem/1.2 var(--f-display); color: var(--muted); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--cloth); }
+
+.search { position: relative; }
+.search input { width: 100%; padding: 10px 12px 10px 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); font-size: 1rem; }
+.search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; fill: none; stroke: var(--muted); stroke-width: 2; }
+.target-banner { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--cloth-soft); border-radius: 8px; padding: 6px 10px; font-size: .9rem; }
+.target-banner button { border: 0; background: none; text-decoration: underline; cursor: pointer; color: var(--cloth); font-weight: 600; }
+
+.results { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 460px; overflow: auto; border-top: 1px solid var(--line); }
+.res { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 6px; border-bottom: 1px solid var(--line); cursor: grab; }
+.res:hover { background: var(--sunk); }
+.res .num { font: 700 1.15rem/1 var(--f-display); text-align: right; font-variant-numeric: tabular-nums; color: var(--cloth); }
+.res .num.ch { font-family: var(--f-board); font-weight: 500; }
+.res .t { font-weight: 600; overflow-wrap: anywhere; }
+.res .fl { font-style: italic; color: var(--muted); font-size: .88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.res .meta { color: var(--muted); font-size: .8rem; }
+.add { border: 1px solid var(--cloth); color: var(--cloth); background: none; border-radius: 999px; padding: 6px 14px; font-weight: 700; cursor: pointer; white-space: nowrap; min-height: 36px; }
+.add:hover { background: var(--cloth); color: var(--cloth-ink); }
+.empty-res { color: var(--muted); padding: 10px 6px; }
+
+.palette { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+.tile { border: 1px solid var(--line); border-radius: 8px; background: var(--paper); overflow: hidden; cursor: grab; display: grid; }
+.tile:hover { border-color: var(--muted); }
+.tile img, .tile .ph { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; max-width: 100%; }
+.tile .ph { background: #000; display: grid; place-items: center; color: #8a8a8a; font-size: .78rem; text-align: center; padding: 6px; }
+.tile .ph.slot { background: var(--sunk); color: var(--muted); border-bottom: 1px dashed var(--line); font-family: var(--f-board); font-size: 1.3rem; }
+.tile .cap { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 6px 8px; font-size: .85rem; font-weight: 600; }
+.tile .cap button { border: 0; background: none; color: var(--cloth); font-weight: 800; font-size: 1.2rem; line-height: 1; cursor: pointer; padding: 2px 6px; }
+
+/* Hymn board */
+.board { background: var(--board); color: var(--board-ink); border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 12px; overflow-x: auto; }
+.board .label { color: var(--board-ink); opacity: .7; writing-mode: vertical-rl; transform: rotate(180deg); }
+.slats { display: flex; gap: 6px; flex-wrap: wrap; }
+.slat { font: 500 1.6rem/1 var(--f-board); letter-spacing: .04em; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 3px; padding: 6px 10px 5px; min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+.slat.blank { opacity: .4; }
+
+/* Order list */
+.tally { color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums; }
+.order { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; min-height: 80px; }
+.card { display: grid; grid-template-columns: 22px 64px minmax(0, 1fr) auto; gap: 10px; align-items: start; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.card.is-active { outline: 2px solid var(--cloth); outline-offset: 1px; }
+.card.k-slot { border-style: dashed; background: var(--paper); }
+.card.is-missing { border-color: var(--warn); background: var(--warn-soft); }
+.card.is-off { opacity: .55; }
+.grip { cursor: grab; align-self: stretch; display: grid; place-items: center; color: var(--muted); border-radius: 4px; touch-action: none; }
+.grip svg { width: 12px; height: 20px; fill: currentColor; }
+.thumb { width: 64px; aspect-ratio: 16 / 9; border-radius: 4px; object-fit: cover; display: block; max-width: 100%; }
+.thumb.black { background: #000; }
+.thumb.deck { background: var(--cloth-soft); color: var(--cloth); display: grid; place-items: center; font: 700 .75rem/1 var(--f-body); letter-spacing: .08em; }
+.hnum { width: 64px; text-align: center; font: 700 1.6rem/1.2 var(--f-display); color: var(--cloth); font-variant-numeric: tabular-nums; }
+.hnum.slot { font-family: var(--f-board); color: var(--muted); }
+.hnum.ch { font: 500 1.35rem/1.2 var(--f-board); }
+.hnum small { display: block; font: 700 .62rem/1 var(--f-body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.body { min-width: 0; display: grid; gap: 6px; }
+.ttl { font-weight: 700; overflow-wrap: anywhere; }
+.sub { color: var(--muted); font-size: .85rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { min-width: 38px; height: 34px; border-radius: 6px; border: 1px solid var(--line); background: var(--paper); cursor: pointer; font-weight: 700; font-variant-numeric: tabular-nums; padding: 0 8px; }
+.chip[aria-pressed="true"] { background: var(--cloth); color: var(--cloth-ink); border-color: var(--cloth); }
+.chip.opt { font-weight: 600; font-size: .85rem; }
+.chips .sep { width: 1px; height: 20px; background: var(--line); margin: 0 2px; }
+.inline-input { width: 100%; max-width: 320px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); }
+.tools { display: flex; gap: 2px; }
+.icon { width: 34px; height: 34px; border: 0; background: none; border-radius: 6px; cursor: pointer; color: var(--muted); display: grid; place-items: center; }
+.icon:hover { background: var(--sunk); color: var(--ink); }
+.icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pick { border: 1px solid var(--cloth); color: var(--cloth); background: var(--surface); border-radius: 999px; padding: 6px 14px; font-weight: 700; cursor: pointer; justify-self: start; min-height: 36px; }
+.drop { display: block; border: 1.5px dashed var(--line); border-radius: 8px; padding: 12px; text-align: center; color: var(--muted); cursor: pointer; background: var(--paper); }
+.drop:hover, .drop.over { border-color: var(--cloth); color: var(--ink); background: var(--cloth-soft); }
+.drop u { color: var(--cloth); font-weight: 600; }
+.vh { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }
+.card:focus-within .drop { border-color: var(--focus); }
+.file-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.fname { font-weight: 600; overflow-wrap: anywhere; }
+.linkbtn { border: 0; background: none; color: var(--cloth); text-decoration: underline; cursor: pointer; padding: 0; font-weight: 600; }
+.warnline { color: var(--warn); }
+.sortable-ghost { opacity: .35; }
+.sortable-chosen { box-shadow: var(--shadow); }
+
+.foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 12px; }
+.foot .left { display: flex; gap: 8px; flex-wrap: wrap; }
+.finish { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
+.finish .row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.finish label { display: inline-flex; gap: 8px; align-items: center; }
+.finish input[type=text] { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); min-width: 0; width: 200px; }
+.finish input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--cloth); }
+.status { font-size: .95rem; min-height: 1.4em; }
+.status.err { color: var(--warn); font-weight: 600; }
+.status.ok { color: var(--ok); font-weight: 600; }
+.status a { color: inherit; }
+.progress { height: 6px; border-radius: 999px; background: var(--sunk); overflow: hidden; }
+.progress > i { display: block; height: 100%; width: 0; background: var(--cloth); transition: width .2s; }
+
+/* Phone: one pane at a time, switched from a bottom bar */
+.mbar { display: none; }
+@media (max-width: 760px) {
+  body { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+  .brand h1 { font-size: 1.25rem; }
+  .brand span { display: none; }
+  .controls { width: 100%; }
+  .controls .seg { flex: 1 1 auto; }
+  .controls .seg button { flex: 1; padding: 6px 8px; }
+  .controls #generate { display: none; }
+  .work { grid-template-columns: minmax(0, 1fr); }
+  .work[data-view="order"] .pick-pane { display: none; }
+  .work[data-view="pick"] .order-pane { display: none; }
+  .results { max-height: none; }
+  .card { grid-template-columns: 18px 48px minmax(0, 1fr); }
+  .card .tools { grid-column: 2 / -1; justify-content: flex-end; }
+  .hnum { width: 48px; font-size: 1.3rem; }
+  .thumb { width: 48px; }
+  .slat { min-width: 52px; font-size: 1.3rem; }
+  .mbar { display: flex; gap: 8px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--surface); border-top: 1px solid var(--line);
+    padding: 10px max(12px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); box-shadow: 0 -2px 10px rgba(0,0,0,.06); }
+  .mbar .btn { flex: 1; }
+  .mbar .btn[aria-pressed="true"] { border-color: var(--cloth); color: var(--cloth); }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="gate" id="gate" hidden>
+  <h1>Service Builder</h1>
+  <p id="gate-msg">Open the Service Builder from the members' page of the church website, or enter the access code.</p>
+  <form id="gate-form">
+    <input id="gate-key" type="password" autocomplete="current-password" placeholder="Access code" aria-label="Access code" required>
+    <button class="btn btn-primary" type="submit">Open</button>
+  </form>
+  <p class="err" id="gate-err" role="alert"></p>
+</div>
+
+<div class="app" id="app" hidden>
+  <header class="top">
+    <div class="brand"><h1>Service Builder</h1><span>Songs of Faith and Praise · CNCOC Songbook</span></div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Service">
+        <button type="button" data-svc="sunday" aria-pressed="true">Sunday</button>
+        <button type="button" data-svc="wednesday" aria-pressed="false">Wednesday</button>
+        <button type="button" data-svc="blank" aria-pressed="false">Blank</button>
+      </div>
+      <label class="field-date">Date <input type="date" id="svc-date"></label>
+      <button type="button" class="btn btn-primary" id="generate">Generate PowerPoint</button>
+    </div>
+  </header>
+
+  <main class="work" id="work" data-view="order">
+    <section class="pane pick-pane" aria-label="Hymns and choruses">
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" id="tab-hymns" aria-selected="true" data-tab="hymns">Hymns</button>
+        <button type="button" role="tab" id="tab-choruses" aria-selected="false" data-tab="choruses">Choruses</button>
+      </div>
+      <div class="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+        <input type="search" id="search" autocomplete="off" enterkeyhint="search" aria-label="Search">
+      </div>
+      <div class="target-banner" id="target-banner" hidden><span id="target-text"></span><button type="button" id="target-cancel">Cancel</button></div>
+      <ul class="results" id="results"></ul>
+      <div class="pane-head"><h2>Service slides</h2><span class="label">Tap + to add</span></div>
+      <ul class="palette" id="palette" aria-label="Service slides"></ul>
+    </section>
+
+    <section class="pane order-pane" aria-labelledby="order-h">
+      <div class="board" aria-label="Hymn board"><span class="label">Hymns</span><div class="slats" id="board"></div></div>
+      <div class="pane-head"><h2 id="order-h">Order of service</h2><span class="tally" id="tally"></span></div>
+      <ol class="order" id="order"></ol>
+      <div class="foot">
+        <div class="left">
+          <button type="button" class="btn" id="add-slot">+ Hymn</button>
+          <button type="button" class="btn" id="add-cslot">+ Chorus</button>
+          <button type="button" class="btn" id="reset">Reset to template</button>
+        </div>
+      </div>
+      <div class="finish">
+        <div class="row">
+          <label>Prepared by <input type="text" id="prepared-by" autocomplete="name" placeholder="Your name"></label>
+          <label><input type="checkbox" id="save-drive" checked> Save to the church Drive and send a notification</label>
+        </div>
+        <div class="progress" id="progress" hidden><i></i></div>
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<nav class="mbar" id="mbar" hidden>
+  <button type="button" class="btn" data-view="pick" aria-pressed="false">Hymns &amp; choruses</button>
+  <button type="button" class="btn" data-view="order" aria-pressed="true">Order</button>
+  <button type="button" class="btn btn-primary" id="generate-m">Generate</button>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+<script src="deck-data.js"></script>
+<script src="gen.js"></script>
+<script>
+(() => {
+  /* ---------- Settings ---------- */
+  const CONFIG = {
+    // Web app address of the church's Apps Script (Deploy > Manage deployments > Web app URL)
+    api: "https://script.google.com/macros/s/AKfycbx-UqVq5zAW97P31-YNt_xBapAoOKdxjmYCBBua1zOw8Q1O5RUwUwR12OIQiqWzuJGtpw/exec",
+    ccli: "287023",
+  };
+  const API = new URLSearchParams(location.search).get("api") || CONFIG.api;
+
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const pad = (n, w = 4) => String(n).padStart(w, "0");
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage unavailable */ } },
+    del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } },
+  };
+
+  /* ---------- Access key and data ---------- */
+  let KEY = null;
+  async function api(params) {
+    const r = await fetch(API + "?" + new URLSearchParams({ ...params, key: KEY }));
+    if (!r.ok) throw new Error("The church library didn't answer (" + r.status + ")");
+    const j = await r.json();
+    if (!j.ok) { const e = new Error(j.error === "locked" ? "locked" : j.error); e.locked = j.error === "locked"; throw e; }
+    return j;
+  }
+  async function apiPost(body) {
+    // text/plain keeps this a "simple" request the Apps Script web app accepts from another site
+    const r = await fetch(API, { method: "POST", body: JSON.stringify({ ...body, key: KEY }) });
+    if (!r.ok) throw new Error("The church Drive didn't answer (" + r.status + ")");
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || "Saving failed");
+    return j;
+  }
+
+  function showGate(msg, err) {
+    $("#app").hidden = true; $("#mbar").hidden = true; $("#gate").hidden = false;
+    if (msg) $("#gate-msg").textContent = msg;
+    $("#gate-err").textContent = err || "";
+  }
+  async function unlock(key) {
+    KEY = key;
+    $("#gate-err").textContent = "";
+    $("#gate-msg").textContent = "Opening the hymnal…";
+    try {
+      const j = await api({ action: "data" });
+      store.set("sb-key", key);
+      start(j.data);
+    } catch (e) {
+      if (e.locked) { store.del("sb-key"); showGate(null, "That access code isn't right. Use the button on the members' page, or check the code."); }
+      else showGate(null, "Couldn't reach the church library. Check your internet connection and try again. (" + e.message + ")");
+    }
+  }
+  $("#gate-form").addEventListener("submit", (e) => { e.preventDefault(); unlock($("#gate-key").value.trim()); });
+
+  /* ---------- App ---------- */
+  let H, CH, state, tab = "hymns";
+  const D = window.DECK_DATA;
+  const TR = {
+    welcome: { label: "Welcome", thumb: 0 },
+    prayer: { label: "Prayer", thumb: 6 },
+    bibleSun: { label: "Bible Class rooms · Sunday", sub: "Ladies in the auditorium, men in the back room", thumb: 4, monthly: true },
+    bibleWed: { label: "Bible Class rooms · Wednesday", sub: "Men in the auditorium, ladies in the back room", thumb: 5, monthly: true },
+    supper: { label: "Lord's Supper & Giving", thumb: 1 },
+    reading: { label: "Reading", thumb: 2 },
+    closing: { label: "Closing Prayer & Announcements", thumb: 3 },
+  };
+  const PALETTE = [
+    { kind: "slot" }, { kind: "cslot" },
+    { kind: "t", key: "welcome" }, { kind: "t", key: "prayer" },
+    { kind: "t", key: "bibleSun" }, { kind: "t", key: "bibleWed" },
+    { kind: "t", key: "supper" }, { kind: "reading" }, { kind: "t", key: "closing" },
+    { kind: "teacher", label: "Bible class" }, { kind: "teacher", label: "Sermon" },
+  ];
+  let uid = 0;
+  const id = () => "i" + (++uid) + Math.random().toString(36).slice(2, 6);
+  const mk = {
+    t: (key) => ({ id: id(), kind: "t", key }),
+    slot: () => ({ id: id(), kind: "slot" }),
+    cslot: () => ({ id: id(), kind: "cslot" }),
+    reading: (ref = "") => ({ id: id(), kind: "reading", ref }),
+    teacher: (label) => ({ id: id(), kind: "teacher", label }),
+    hymn: (n) => { const h = H.get(n); return { id: id(), kind: "hymn", n, st: [...h.st], oe: h.oe > 0, oi: false }; },
+    chorus: (n) => ({ id: id(), kind: "chorus", n }),
+  };
+  const TEMPLATES = {
+    sunday: () => [mk.t("welcome"), mk.slot(), mk.slot(), mk.t("prayer"), mk.t("bibleSun"), mk.teacher("Bible class"), mk.t("prayer"),
+      mk.t("welcome"), mk.cslot(), mk.slot(), mk.slot(), mk.t("prayer"), mk.slot(), mk.slot(), mk.t("supper"), mk.slot(), mk.reading(),
+      mk.teacher("Sermon"), mk.slot(), mk.t("closing")],
+    wednesday: () => [mk.slot(), mk.slot(), mk.slot(), mk.slot(), mk.t("prayer"), mk.t("bibleWed"), mk.teacher("Bible class"), mk.t("prayer")],
+    blank: () => [],
+  };
+
+  const STORE = "sb-service-v2";
+  function nextDay(dow) {
+    const d = new Date(); const add = (dow - d.getDay() + 7) % 7; d.setDate(d.getDate() + add);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1, 2)}-${pad(d.getDate(), 2)}`;
+  }
+  function load() {
+    try {
+      const s = JSON.parse(store.get(STORE) || "null");
+      if (s && Array.isArray(s.items)) {
+        const items = s.items.filter((it) => (it.kind !== "hymn" || H.has(it.n)) && (it.kind !== "chorus" || CH.has(it.n)));
+        items.forEach((it) => { it.id = id(); delete it.missing; });
+        return { service: s.service || "sunday", date: s.date || nextDay(0), items, active: null };
+      }
+    } catch (e) { /* fall through */ }
+    return { service: "sunday", date: nextDay(0), items: TEMPLATES.sunday(), active: null };
+  }
+  function save() { store.set(STORE, JSON.stringify({ service: state.service, date: state.date, items: state.items.map(({ missing, ...x }) => x) })); }
+
+  const ICON = {
+    grip: '<svg viewBox="0 0 12 20" aria-hidden="true"><circle cx="3" cy="4" r="1.6"/><circle cx="9" cy="4" r="1.6"/><circle cx="3" cy="10" r="1.6"/><circle cx="9" cy="10" r="1.6"/><circle cx="3" cy="16" r="1.6"/><circle cx="9" cy="16" r="1.6"/></svg>',
+    up: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>',
+    down: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
+    x: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    swap: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h13l-3-3M20 17H7l3 3"/></svg>',
+  };
+
+  /* ---------- Slides for an item (same rules as gen.js) ---------- */
+  function hymnSlides(it) {
+    const h = H.get(it.n), out = [];
+    const push = (code, count) => { for (let p = 1; p <= count; p++) { const name = `${pad(h.n)}-${code}-${pad(p, 2)}`; out.push({ name, path: `${h.f}/${name}.gif` }); } };
+    if (it.oi && h.oi) push("OI", h.oi);
+    h.st.forEach((s, i) => { if (it.st.includes(s)) push(pad(s, 2), h.sp[i]); });
+    if (it.oe && h.oe) push("OE", h.oe);
+    return out;
+  }
+  const roomsShown = () => !state.date || window.ServiceDeck.isLastOfMonth(state.date);
+  function slideCounts() {
+    let prev = null, total = 0; const per = new Map();
+    for (const it of state.items) {
+      let c = 0;
+      if (it.kind === "slot" || it.kind === "cslot") { per.set(it.id, 0); continue; }
+      if (it.kind === "t" && TR[it.key].monthly && !roomsShown()) { per.set(it.id, 0); continue; }
+      if (it.kind === "hymn") c = hymnSlides(it).length + (prev && prev.kind !== "hymn" ? 0 : 1);
+      else if (it.kind === "chorus") c = CH.get(it.n).slides.length;
+      else if (it.kind === "teacher" && uploads.has(it.id)) c = uploads.get(it.id).slides;
+      else c = 1;
+      per.set(it.id, c); total += c; prev = it;
+    }
+    return { per, total: total + 1 };
+  }
+
+  /* ---------- Teacher PowerPoint uploads (kept in memory only) ---------- */
+  const uploads = new Map();
+  async function takeFile(itemId, file) {
+    if (!file) return;
+    if (!/\.pptx$/i.test(file.name)) { status(`${file.name} isn't a .pptx file. In PowerPoint use File > Save As > PowerPoint Presentation (.pptx).`, "err"); return; }
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const z = await JSZip.loadAsync(bytes);
+      const pres = await z.file("ppt/presentation.xml").async("string");
+      const slides = (pres.match(/<p:sldId\b/g) || []).length;
+      const [cx, cy] = (pres.match(/<p:sldSz cx="(\d+)" cy="(\d+)"/) || [0, 16, 9]).slice(1).map(Number);
+      if (!slides) throw new Error("no slides");
+      uploads.set(itemId, { name: file.name, bytes, slides, wide: cx / cy > 1.5 });
+      const it = state.items.find((x) => x.id === itemId);
+      status(`Added ${file.name} (${slides} slides) for the ${it ? it.label.toLowerCase() : "teacher's"} PowerPoint.`, "ok");
+    } catch (e) {
+      status(`Couldn't open ${file.name}. Check it opens in PowerPoint and is saved as .pptx.`, "err");
+    }
+    renderOrder();
+  }
+
+  /* ---------- Search ---------- */
+  const norm = (s) => s.toLowerCase().replace(/[’‘]/g, "'").replace(/[^a-z0-9' ]+/g, " ").replace(/\s+/g, " ").trim();
+  function search(q, list) {
+    q = norm(q);
+    if (!q) return list.slice(0, 30);
+    const toks = q.split(" "), scored = [];
+    for (const x of list) {
+      let sc = 0; const tn = norm(x.t), fl = norm(x.fl);
+      if (/^\d+$/.test(q)) { const ns = String(x.n); if (ns === q) sc = 1000; else if (ns.startsWith(q)) sc = 500 - ns.length; }
+      if (tn.startsWith(q)) sc = Math.max(sc, 300);
+      else if (tn.includes(q)) sc = Math.max(sc, 220);
+      else if (fl.includes(q)) sc = Math.max(sc, 180);
+      else if (x.s.includes(q)) sc = Math.max(sc, 140);
+      else if (toks.length > 1 && toks.every((t) => x.s.includes(t))) sc = Math.max(sc, 100);
+      if (sc) scored.push([sc, x]);
+    }
+    scored.sort((a, b) => b[0] - a[0] || a[1].n - b[1].n);
+    return scored.slice(0, 40).map((x) => x[1]);
+  }
+
+  /* ---------- Rendering ---------- */
+  function renderResults() {
+    const active = state.items.find((x) => x.id === state.active);
+    const verb = active ? "Choose" : "Add";
+    const q = $("#search").value;
+    if (tab === "hymns") {
+      const list = search(q, [...H.values()]);
+      $("#results").innerHTML = list.length ? list.map((h) => `
+        <li class="res" data-kind="hymn" data-n="${h.n}">
+          <span class="num">${h.n}</span>
+          <span style="min-width:0"><div class="t">${esc(h.t)}</div><div class="fl">${esc(h.fl)}</div>
+            <div class="meta">${h.st.length} stanza${h.st.length > 1 ? "s" : ""}${h.rf ? " · refrain" : ""}${h.oe ? " · optional ending" : ""}${h.oi ? " · optional intro" : ""}</div></span>
+          <button type="button" class="add" data-add="${h.n}">${verb}</button>
+        </li>`).join("") : `<li class="empty-res">No hymn matches “${esc(q)}”. Try the number, a different word, or the first line.</li>`;
+    } else {
+      const list = search(q, [...CH.values()]);
+      $("#results").innerHTML = list.length ? list.map((c) => `
+        <li class="res" data-kind="chorus" data-n="${c.n}">
+          <span class="num ch">${c.n}</span>
+          <span style="min-width:0"><div class="t">${esc(c.t)}${c.ref ? ` <span class="meta">${esc(c.ref)}</span>` : ""}</div><div class="fl">${esc(c.fl)}</div>
+            <div class="meta">${c.slides.length} slide${c.slides.length > 1 ? "s" : ""}</div></span>
+          <button type="button" class="add" data-addc="${c.n}">${verb}</button>
+        </li>`).join("") : `<li class="empty-res">No chorus matches “${esc(q)}”. Try the songbook number or a word from the chorus.</li>`;
+    }
+  }
+  function setTab(t) {
+    tab = t;
+    document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
+    $("#search").placeholder = t === "hymns" ? "Hymn number, title or words" : "Songbook number, title or words";
+    renderResults();
+  }
+  function renderPalette() {
+    $("#palette").innerHTML = PALETTE.map((p, i) => {
+      let img, label;
+      if (p.kind === "slot") { img = `<div class="ph slot">Hymn</div>`; label = "Hymn slot"; }
+      else if (p.kind === "cslot") { img = `<div class="ph slot">Chorus</div>`; label = "Chorus slot"; }
+      else if (p.kind === "teacher") { img = `<div class="ph">${esc(p.label)}<br>teacher's slides</div>`; label = p.label === "Sermon" ? "Sermon PowerPoint" : "Bible class PowerPoint"; }
+      else { const key = p.kind === "reading" ? "reading" : p.key; img = `<img src="${D.thumbs[TR[key].thumb]}" alt="">`; label = TR[key].label; }
+      return `<li class="tile" data-pal="${i}">${img}<div class="cap"><span>${esc(label)}</span><button type="button" data-paladd="${i}" aria-label="Add ${esc(label)}">+</button></div></li>`;
+    }).join("");
+  }
+  function cardHtml(it, counts) {
+    const tools = `<button type="button" class="icon" data-act="up" aria-label="Move up">${ICON.up}</button>
+      <button type="button" class="icon" data-act="down" aria-label="Move down">${ICON.down}</button>
+      <button type="button" class="icon" data-act="remove" aria-label="Remove">${ICON.x}</button>`;
+    const swap = `<button type="button" class="icon" data-act="pick" aria-label="Change">${ICON.swap}</button>`;
+    const grip = `<span class="grip" aria-hidden="true">${ICON.grip}</span>`;
+    const miss = it.missing ? " is-missing" : "";
+    if (it.kind === "hymn") {
+      const h = H.get(it.n);
+      const chips = h.st.map((s) => `<button type="button" class="chip" data-act="st" data-s="${s}" aria-pressed="${it.st.includes(s)}" aria-label="Stanza ${s}">${s}</button>`).join("");
+      const opts = (h.oi ? `<button type="button" class="chip opt" data-act="oi" aria-pressed="${it.oi}">Intro</button>` : "")
+        + (h.oe ? `<button type="button" class="chip opt" data-act="oe" aria-pressed="${it.oe}">Ending</button>` : "");
+      const n = counts.per.get(it.id);
+      return `<li class="card${it.st.length ? "" : " is-missing"}${state.active === it.id ? " is-active" : ""}" data-id="${it.id}">${grip}<span class="hnum">${h.n}</span>
+        <div class="body"><div class="ttl">${esc(h.t)}</div>
+          <div class="chips"><span class="label">Stanzas</span>${chips}${opts ? '<span class="sep"></span>' + opts : ""}</div>
+          <div class="sub">${it.st.length ? `${n} slide${n === 1 ? "" : "s"}` : "Choose at least one stanza"}${h.rf ? " · refrain included with each stanza" : ""}</div></div>
+        <div class="tools">${swap}${tools}</div></li>`;
+    }
+    if (it.kind === "chorus") {
+      const c = CH.get(it.n), n = c.slides.length;
+      return `<li class="card${state.active === it.id ? " is-active" : ""}" data-id="${it.id}">${grip}<span class="hnum ch"><small>Chorus</small>${c.n}</span>
+        <div class="body"><div class="ttl">${esc(c.t)}</div><div class="sub">${n} slide${n === 1 ? "" : "s"} · ${esc(c.fl)}</div></div>
+        <div class="tools">${swap}${tools}</div></li>`;
+    }
+    if (it.kind === "slot" || it.kind === "cslot") {
+      const act = state.active === it.id, word = it.kind === "slot" ? "hymn" : "chorus";
+      return `<li class="card k-slot${act ? " is-active" : ""}${miss}" data-id="${it.id}">${grip}<span class="hnum slot${it.kind === "cslot" ? " ch" : ""}">${it.kind === "cslot" ? "<small>Chorus</small>" : ""}—</span>
+        <div class="body"><div class="ttl">${act ? `Choosing a ${word}…` : word[0].toUpperCase() + word.slice(1)}</div>
+          <button type="button" class="pick" data-act="pick">${act ? `Pick from the ${it.kind === "slot" ? "hymnal" : "songbook"}` : `Choose a ${word}`}</button></div><div class="tools">${tools}</div></li>`;
+    }
+    if (it.kind === "teacher") {
+      const up = uploads.get(it.id);
+      const body = up
+        ? `<div class="file-row"><span class="fname">${esc(up.name)}</span><span class="sub">${up.slides} slide${up.slides === 1 ? "" : "s"}</span>
+             <button type="button" class="linkbtn" data-act="unfile">Remove</button></div>
+           ${up.wide ? "" : `<div class="sub warnline">This file is 4:3, so its slides will sit off-centre on a widescreen projector. Ask the teacher for a widescreen (16:9) version if possible.</div>`}`
+        : `<label class="drop" for="file-${it.id}" data-drop="${it.id}">Drop the teacher's PowerPoint here, or <u>choose a file</u></label>
+           <input type="file" class="vh" id="file-${it.id}" data-act="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation">
+           <div class="sub">If no file is added, a black marker slide is used instead.</div>`;
+      return `<li class="card" data-id="${it.id}">${grip}<span class="thumb ${up ? "deck" : "black"}">${up ? "PPTX" : ""}</span>
+        <div class="body"><div class="ttl">${esc(it.label)} PowerPoint</div>${body}</div><div class="tools">${tools}</div></li>`;
+    }
+    const key = it.kind === "reading" ? "reading" : it.key, tr = TR[key];
+    const off = tr.monthly && !roomsShown();
+    const extra = it.kind === "reading"
+      ? `<label class="sub" for="ref-${it.id}">Reference shown on the slide</label><input class="inline-input" id="ref-${it.id}" data-act="ref" value="${esc(it.ref || "")}" placeholder="e.g. John 3:16–21">`
+      : (tr.sub ? `<div class="sub">${esc(tr.sub)}</div>` : "") + (tr.monthly ? `<div class="sub${off ? " warnline" : ""}">${off ? "Not shown this week: only on the last " + (key === "bibleSun" ? "Sunday" : "Wednesday") + " of the month." : "Shown this week (last of the month)."}</div>` : "");
+    return `<li class="card${off ? " is-off" : ""}" data-id="${it.id}">${grip}<img class="thumb" src="${D.thumbs[tr.thumb]}" alt="">
+      <div class="body"><div class="ttl">${esc(tr.label)}</div>${extra}</div><div class="tools">${tools}</div></li>`;
+  }
+  function renderOrder() {
+    const counts = slideCounts();
+    $("#order").innerHTML = state.items.map((it) => cardHtml(it, counts)).join("") || `<li class="sub">Add hymns, choruses and service slides, or pick a template above.</li>`;
+    const hymns = state.items.filter((x) => x.kind === "hymn" || x.kind === "slot");
+    $("#board").innerHTML = hymns.length ? hymns.map((x) => `<span class="slat${x.kind === "slot" ? " blank" : ""}">${x.kind === "hymn" ? x.n : "—"}</span>`).join("") : `<span class="slat blank">—</span>`;
+    const nh = state.items.filter((x) => x.kind === "hymn").length, nc = state.items.filter((x) => x.kind === "chorus").length;
+    const empty = state.items.filter((x) => x.kind === "slot" || x.kind === "cslot").length;
+    $("#tally").textContent = `${nh} hymn${nh === 1 ? "" : "s"} · ${nc} chorus${nc === 1 ? "" : "es"}${empty ? ` · ${empty} empty` : ""} · ${counts.total} slides`;
+    document.querySelectorAll(".seg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.svc === state.service)));
+    $("#svc-date").value = state.date || "";
+    const act = state.items.find((x) => x.id === state.active);
+    $("#target-banner").hidden = !act;
+    if (act) $("#target-text").textContent = act.kind === "hymn" ? `Changing hymn ${act.n}. Pick its replacement.` : act.kind === "chorus" ? `Changing chorus ${act.n}. Pick its replacement.` : act.kind === "cslot" ? "Pick a chorus for the selected slot." : "Pick a hymn for the selected slot.";
+    save();
+  }
+  function render() { renderOrder(); renderResults(); }
+  function status(msg, cls = "") { const s = $("#status"); s.innerHTML = msg; s.className = "status " + cls; }
+  function progress(f) { const p = $("#progress"); p.hidden = f == null; if (f != null) p.firstElementChild.style.width = Math.round(f * 100) + "%"; }
+
+  /* ---------- Phone view switching ---------- */
+  const phone = matchMedia("(max-width: 760px)");
+  function setView(v) {
+    $("#work").dataset.view = v;
+    document.querySelectorAll(".mbar [data-view]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === v)));
+    if (phone.matches) window.scrollTo({ top: 0 });
+  }
+  document.querySelectorAll(".mbar [data-view]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
+
+  /* ---------- Actions ---------- */
+  function flash(itemId) {
+    if (phone.matches) setView("order");
+    requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-id="${itemId}"]`);
+      if (el) el.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    });
+  }
+  function place(newItem, slotKind) {
+    const i = state.items.findIndex((x) => x.id === state.active);
+    if (i >= 0) { state.items[i] = { ...newItem, id: state.items[i].id }; state.active = null; render(); flash(state.items[i].id); return; }
+    const slot = state.items.findIndex((x) => x.kind === slotKind);
+    if (slot >= 0) { state.items[slot] = { ...newItem, id: state.items[slot].id }; render(); flash(state.items[slot].id); return; }
+    let at = state.items.length;
+    if (newItem.kind === "chorus" || newItem.kind === "cslot") { // keep choruses together, after the second Welcome
+      const lastC = state.items.map((x) => (x.kind === "chorus" || x.kind === "cslot" ? 1 : 0)).lastIndexOf(1);
+      const welcomes = state.items.map((x, k) => (x.kind === "t" && x.key === "welcome" ? k : -1)).filter((k) => k >= 0);
+      if (lastC >= 0) at = lastC + 1; else if (welcomes.length) at = welcomes[Math.min(1, welcomes.length - 1)] + 1;
+    }
+    state.items.splice(at, 0, newItem); render(); flash(newItem.id);
+  }
+  const addHymn = (n) => place(mk.hymn(n), "slot");
+  const addChorus = (n) => place(mk.chorus(n), "cslot");
+  function fromPalette(i) {
+    const p = PALETTE[i];
+    if (p.kind === "slot") return mk.slot();
+    if (p.kind === "cslot") return mk.cslot();
+    if (p.kind === "reading") return mk.reading();
+    if (p.kind === "teacher") return mk.teacher(p.label);
+    return mk.t(p.key);
+  }
+  function setService(svc) {
+    state.service = svc; state.items = TEMPLATES[svc](); state.active = null; uploads.clear();
+    state.date = svc === "wednesday" ? nextDay(3) : svc === "sunday" ? nextDay(0) : state.date;
+    status(""); render();
+  }
+
+  function wire() {
+    document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+    $("#results").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-add]"), c = e.target.closest("[data-addc]");
+      if (b) addHymn(+b.dataset.add); else if (c) addChorus(+c.dataset.addc);
+    });
+    $("#palette").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-paladd]"); if (!b) return;
+      const it = fromPalette(+b.dataset.paladd); state.items.push(it); render(); flash(it.id);
+    });
+    let t; $("#search").addEventListener("input", () => { clearTimeout(t); t = setTimeout(renderResults, 80); });
+    $("#search").addEventListener("keydown", (e) => { if (e.key === "Enter") { const first = $("#results .add"); if (first) { e.preventDefault(); first.click(); } } });
+    $("#target-cancel").addEventListener("click", () => { state.active = null; render(); });
+    document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => setService(b.dataset.svc)));
+    $("#svc-date").addEventListener("change", (e) => { state.date = e.target.value; renderOrder(); });
+    $("#add-slot").addEventListener("click", () => { const s = mk.slot(); state.items.push(s); render(); flash(s.id); });
+    $("#add-cslot").addEventListener("click", () => { const s = mk.cslot(); state.active = null; place(s, "__none"); });
+    $("#reset").addEventListener("click", () => setService(state.service));
+    $("#prepared-by").value = store.get("sb-name") || "";
+    $("#prepared-by").addEventListener("change", (e) => store.set("sb-name", e.target.value.trim()));
+    $("#save-drive").checked = store.get("sb-drive") !== "0";
+    $("#save-drive").addEventListener("change", (e) => store.set("sb-drive", e.target.checked ? "1" : "0"));
+
+    $("#order").addEventListener("change", (e) => {
+      if (e.target.dataset.act !== "file") return;
+      takeFile(e.target.closest("[data-id]").dataset.id, e.target.files[0]);
+    });
+    $("#order").addEventListener("dragover", (e) => {
+      const d = e.target.closest("[data-drop]"); if (!d || !e.dataTransfer.types.includes("Files")) return;
+      e.preventDefault(); d.classList.add("over");
+    });
+    $("#order").addEventListener("dragleave", (e) => { const d = e.target.closest("[data-drop]"); if (d) d.classList.remove("over"); });
+    $("#order").addEventListener("drop", (e) => {
+      const d = e.target.closest("[data-drop]"); if (!d || !e.dataTransfer.files.length) return;
+      e.preventDefault(); takeFile(d.dataset.drop, e.dataTransfer.files[0]);
+    });
+    $("#order").addEventListener("input", (e) => {
+      if (e.target.dataset.act !== "ref") return;
+      const it = state.items.find((x) => x.id === e.target.closest("[data-id]").dataset.id); it.ref = e.target.value; save();
+    });
+    $("#order").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-act]"); if (!b || b.dataset.act === "ref" || b.dataset.act === "file") return;
+      const card = b.closest("[data-id]"); const i = state.items.findIndex((x) => x.id === card.dataset.id); const it = state.items[i];
+      switch (b.dataset.act) {
+        case "unfile": uploads.delete(it.id); status(""); break;
+        case "remove": state.items.splice(i, 1); uploads.delete(it.id); if (state.active === it.id) state.active = null; break;
+        case "up": if (i > 0) [state.items[i - 1], state.items[i]] = [state.items[i], state.items[i - 1]]; break;
+        case "down": if (i < state.items.length - 1) [state.items[i + 1], state.items[i]] = [state.items[i], state.items[i + 1]]; break;
+        case "st": { const s = +b.dataset.s; it.st = it.st.includes(s) ? it.st.filter((x) => x !== s) : [...it.st, s].sort((a, z) => a - z); break; }
+        case "oe": it.oe = !it.oe; break;
+        case "oi": it.oi = !it.oi; break;
+        case "pick":
+          state.active = state.active === it.id ? null : it.id;
+          if (state.active) setTab(it.kind === "chorus" || it.kind === "cslot" ? "choruses" : "hymns");
+          render();
+          if (state.active) {
+            if (phone.matches) setView("pick");
+            const s = $("#search"); s.value = ""; renderResults(); s.focus({ preventScroll: true }); if (!phone.matches) s.scrollIntoView({ block: "center" });
+          }
+          return;
+      }
+      if (it) delete it.missing;
+      renderOrder(); if (b.dataset.act === "remove") renderResults();
+    });
+
+    Sortable.create($("#order"), {
+      group: { name: "svc", pull: false, put: true }, handle: ".grip", animation: 150,
+      onEnd: (e) => { if (e.from !== e.to) return; const [m] = state.items.splice(e.oldIndex, 1); state.items.splice(e.newIndex, 0, m); renderOrder(); },
+      onAdd: (e) => {
+        const el = e.item; let it;
+        if (el.dataset.kind === "hymn") it = mk.hymn(+el.dataset.n);
+        else if (el.dataset.kind === "chorus") it = mk.chorus(+el.dataset.n);
+        else it = fromPalette(+el.dataset.pal);
+        el.remove();
+        const slotKind = it.kind === "hymn" ? "slot" : it.kind === "chorus" ? "cslot" : null;
+        if (slotKind) {
+          const near = [e.newIndex, e.newIndex - 1].find((k) => state.items[k] && state.items[k].kind === slotKind);
+          if (near !== undefined) { state.items[near] = { ...it, id: state.items[near].id }; state.active = null; render(); return; }
+        }
+        state.items.splice(e.newIndex, 0, it); render();
+      },
+    });
+    for (const sel of ["#results", "#palette"]) {
+      Sortable.create($(sel), { group: { name: "svc", pull: "clone", put: false }, sort: false, animation: 150, filter: "button", preventOnFilter: false, delay: 150, delayOnTouchOnly: true });
+    }
+    $("#generate").addEventListener("click", generate);
+    $("#generate-m").addEventListener("click", () => { setView("order"); generate(); });
+  }
+
+  /* ---------- Generate ---------- */
+  const picCache = new Map();
+  async function fetchPictures(hymnItems, onStep) {
+    const jobs = hymnItems.map((it) => ({ n: it.n, names: hymnSlides(it).map((s) => s.name).filter((nm) => !picCache.has(nm)) })).filter((j) => j.names.length);
+    let done = 0;
+    const run = async (j) => {
+      const r = await api({ action: "pics", n: j.n, names: j.names.join(",") });
+      for (const [nm, b64] of Object.entries(r.pics)) picCache.set(nm, b64ToBytes(b64));
+      onStep(++done, jobs.length);
+    };
+    const queue = [...jobs];
+    await Promise.all([0, 1, 2].map(async () => { while (queue.length) await run(queue.shift()); }));
+  }
+  function b64ToBytes(s) { const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+  function bytesToB64(u) { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
+  function fileName() {
+    const [y, m, d] = (state.date || new Date().toISOString().slice(0, 10)).split("-");
+    const svc = { sunday: "Sunday Service", wednesday: "Wednesday Service", blank: "Service" }[state.service];
+    return `${svc} ${d}-${m}-${y}.pptx`;
+  }
+  function summary() {
+    const lines = [];
+    for (const it of state.items) {
+      if (it.kind === "hymn") { const h = H.get(it.n); lines.push(`Hymn ${h.n} ${h.t}: stanzas ${it.st.join(", ")}${it.oe && h.oe ? " + ending" : ""}${it.oi && h.oi ? " + intro" : ""}`); }
+      else if (it.kind === "chorus") { const c = CH.get(it.n); lines.push(`Chorus ${c.n} ${c.t}`); }
+      else if (it.kind === "teacher") { const up = uploads.get(it.id); lines.push(`${it.label} PowerPoint: ${up ? `${up.name} (${up.slides} slides)` : "not added (marker slide)"}`); }
+      else if (it.kind === "reading") lines.push(`Reading${it.ref ? ": " + it.ref : " (no reference)"}`);
+      else if (it.kind === "t") { if (!(TR[it.key].monthly && !roomsShown())) lines.push(TR[it.key].label); }
+    }
+    return lines.join("\n");
+  }
+  function download(name, bytes) {
+    const url = URL.createObjectURL(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" }));
+    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+  let building = false;
+  async function generate() {
+    if (building) return;
+    const empty = state.items.filter((x) => x.kind === "slot" || x.kind === "cslot");
+    const noStanza = state.items.filter((x) => x.kind === "hymn" && !x.st.length);
+    state.items.forEach((x) => { x.missing = x.kind === "slot" || x.kind === "cslot"; });
+    if (empty.length || noStanza.length) {
+      renderOrder();
+      status(empty.length ? `${empty.length} slot${empty.length > 1 ? "s are" : " is"} still empty. Choose a hymn or chorus, or remove the slot.` : "A hymn has no stanzas chosen.", "err");
+      flash((empty[0] || noStanza[0]).id); return;
+    }
+    if (!state.items.length) { status("Add some hymns and slides first.", "err"); return; }
+    building = true;
+    const btns = [$("#generate"), $("#generate-m")]; btns.forEach((b) => { b.disabled = true; b.textContent = "Building…"; });
+    try {
+      const hymns = state.items.filter((x) => x.kind === "hymn");
+      status("Fetching the hymn pictures…"); progress(0.02);
+      await fetchPictures(hymns, (k, n) => { status(`Fetching the hymn pictures (${k} of ${n})…`); progress(0.05 + 0.6 * k / n); });
+      status("Building the PowerPoint…"); progress(0.7);
+      const items = state.items.map((it) => {
+        if (it.kind === "t") return { type: "transition", key: it.key };
+        if (it.kind === "reading") return { type: "reading", ref: it.ref };
+        if (it.kind === "teacher") return { type: "teacher", label: it.label, file: uploads.has(it.id) ? uploads.get(it.id).bytes : null };
+        if (it.kind === "chorus") { const c = CH.get(it.n); return { type: "chorus", number: c.n, title: c.t, ref: c.ref, slides: c.slides }; }
+        const h = H.get(it.n); return { type: "hymn", number: h.n, title: h.t, slides: hymnSlides(it) };
+      });
+      const bytes = await window.ServiceDeck.buildDeck({
+        JSZip: window.JSZip, base: b64ToBytes(D.base), tpl: D.tpl, items, ccli: CONFIG.ccli, date: state.date,
+        getImage: async (s) => ({ bytes: picCache.get(s.name), ext: "gif" }),
+      });
+      const name = fileName();
+      download(name, bytes);
+      const markers = state.items.filter((x) => x.kind === "teacher" && !uploads.has(x.id)).map((x) => x.label.toLowerCase());
+      const note = markers.length ? ` No file was added for the ${markers.join(" or ")} PowerPoint, so a marker slide was used.` : "";
+      if ($("#save-drive").checked) {
+        status(`Downloaded ${esc(name)}. Saving a copy to the church Drive…`); progress(0.85);
+        try {
+          const r = await apiPost({ action: "save", filename: name, data: bytesToB64(bytes), summary: summary(), preparedBy: $("#prepared-by").value.trim() });
+          status(`Done. ${esc(name)} is downloaded and <a href="${esc(r.url)}" target="_blank" rel="noopener">saved to the church Drive</a>, and a notification was sent.${esc(note)}`, "ok");
+        } catch (e) {
+          status(`${esc(name)} is downloaded, but saving to the church Drive didn't work (${esc(e.message)}). Send the file on by hand this time.${esc(note)}`, "err");
+        }
+      } else status(`Done. ${esc(name)} is downloaded.${esc(note)}`, "ok");
+    } catch (err) {
+      if (err.locked) { showGate(null, "The access code has changed. Open the Service Builder again from the members' page."); return; }
+      status(`Couldn't build the PowerPoint: ${esc(err && err.message ? err.message : err)}`, "err");
+    } finally {
+      progress(null); building = false;
+      btns.forEach((b) => { b.disabled = false; b.textContent = b.id === "generate" ? "Generate PowerPoint" : "Generate"; });
+    }
+  }
+
+  /* ---------- Start ---------- */
+  let started = false;
+  function start(data) {
+    if (started) { $("#gate").hidden = true; $("#app").hidden = false; $("#mbar").hidden = false; return; }
+    started = true;
+    // hymns rows: [number, title, stanzas[], partsPerStanza[], endingSlides, introSlides, folder, firstLine, hasRefrain, searchText]
+    H = new Map(data.hymns.map((r) => [r[0], { n: r[0], t: r[1], st: r[2], sp: r[3], oe: r[4], oi: r[5], f: r[6], fl: r[7], rf: !!r[8], s: r[9] }]));
+    CH = new Map(data.choruses.map((c) => {
+      const words = c.slides.flat().flatMap((b) => b.lines);
+      return [c.number, { n: c.number, t: c.title, ref: c.ref, slides: c.slides, fl: words[0] || "", s: norm(`${c.number} ${c.title} ${c.ref} ${words.join(" ")}`) }];
+    }));
+    state = load();
+    $("#gate").hidden = true; $("#app").hidden = false; $("#mbar").hidden = false;
+    wire(); renderPalette(); setTab("hymns"); render();
+  }
+
+  // The members' page link carries the key after # (never sent to any server); move it out of sight
+  const m = location.hash.match(/key=([^&]+)/);
+  if (m) { history.replaceState(null, "", location.pathname + location.search); unlock(decodeURIComponent(m[1])); }
+  else if (store.get("sb-key")) unlock(store.get("sb-key"));
+  else showGate();
+})();
+</script>
+</body>
+</html>
