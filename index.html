@@ -321,6 +321,22 @@ h1, h2 { margin: 0; text-wrap: balance; }
     if (!j.ok) { const e = new Error(j.error === "locked" ? "locked" : j.error); e.locked = j.error === "locked"; throw e; }
     return j;
   }
+  // A dropped connection shows up as "Load failed" (Safari) or "Failed to fetch" (Chrome): say so plainly
+  const netMsg = (e) => /load failed|failed to fetch|networkerror/i.test(e.message) ? "the connection to the church Drive dropped" : e.message;
+  // Large files go up in ~3 MB pieces (a multiple of 3 bytes, so the base64 pieces join up), each retried
+  async function uploadInPieces(bytes, onStep) {
+    const size = 3 * 1024 * 1024, total = Math.max(1, Math.ceil(bytes.length / size));
+    const uploadId = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => (b % 36).toString(36)).join("") + Date.now().toString(36);
+    for (let i = 0; i < total; i++) {
+      const data = bytesToB64(bytes.subarray(i * size, (i + 1) * size));
+      for (let attempt = 1; ; attempt++) {
+        try { await apiPost({ action: "chunk", uploadId, index: i, total, data }); break; }
+        catch (e) { if (e.locked || attempt >= 4) throw e; await new Promise((r) => setTimeout(r, 1500 * attempt)); }
+      }
+      if (onStep) onStep(i + 1, total);
+    }
+    return { uploadId, total };
+  }
   async function apiPost(body, opts = {}) {
     // text/plain keeps this a "simple" request the Apps Script web app accepts from another site
     const r = await fetch(API, { method: "POST", body: JSON.stringify({ ...body, key: KEY }), keepalive: !!opts.keepalive });
@@ -561,13 +577,14 @@ h1, h2 { margin: 0; text-wrap: balance; }
     uploading++; uploadingLabels.add(label); renderOrder();
     status(`Uploading ${esc(file.name)} to the church Drive…`);
     try {
-      const r = await apiPost({ action: "attach", service: target.service, date: target.date, label, filename: file.name, data: bytesToB64(bytes), slides, wide, uploadedBy: myName() });
+      const up = await uploadInPieces(bytes, (k, n) => { if (n > 1) status(`Uploading ${esc(file.name)} to the church Drive (${Math.round(100 * k / n)}%)…`); });
+      const r = await apiPost({ action: "attach", service: target.service, date: target.date, label, filename: file.name, ...up, slides, wide, uploadedBy: myName() });
       fileCache.set(r.plan.attachments[label].id, bytes);
       if (state === target) { state.attachments = r.plan.attachments; showSavedState(); }
       status(`${esc(file.name)} (${slides} slides) is saved as the ${esc(label.toLowerCase())} PowerPoint for ${SERVICE[target.service]} ${niceDate(target.date, { day: "numeric", month: "long" })}. Anyone can now add the songs or generate the slides.`, "ok");
     } catch (e) {
       if (e.locked) { showGate(null, "The access code has changed. Open the Service Builder again from the members' page."); return; }
-      status(`Couldn't upload ${esc(file.name)}: ${esc(e.message)}. Try again.`, "err");
+      status(`Couldn't upload ${esc(file.name)}: ${esc(netMsg(e))}. Try again.`, "err");
     } finally {
       uploading--; uploadingLabels.delete(label);
       if (state === target) renderOrder();
@@ -955,11 +972,12 @@ h1, h2 { margin: 0; text-wrap: balance; }
       if ($("#save-drive").checked) {
         status(`Downloaded ${esc(name)}. Saving a copy to the church Drive…`); progress(0.85);
         try {
-          const r = await apiPost({ action: "save", filename: name, data: bytesToB64(bytes), summary: summary(), preparedBy: myName() });
+          const up = await uploadInPieces(bytes, (k, n) => { status(`Downloaded ${esc(name)}. Saving a copy to the church Drive (${Math.round(100 * k / n)}%)…`); progress(0.85 + 0.13 * k / n); });
+          const r = await apiPost({ action: "save", filename: name, ...up, summary: summary(), preparedBy: myName() });
           const mail = r.notified ? ` A notification was emailed to ${esc(r.notified)}.` : r.notifyError ? ` No notification was emailed: ${esc(r.notifyError)}.` : "";
           status(`Done. ${esc(name)} is downloaded and <a href="${esc(r.url)}" target="_blank" rel="noopener">saved to the church Drive</a>.${mail}${esc(note)}`, r.notifyError ? "err" : "ok");
         } catch (e) {
-          status(`${esc(name)} is downloaded, but saving to the church Drive didn't work (${esc(e.message)}). Send the file on by hand this time.${esc(note)}`, "err");
+          status(`${esc(name)} is downloaded, but saving to the church Drive didn't work (${esc(netMsg(e))}). Click Generate again to retry, or send the file on by hand.${esc(note)}`, "err");
         }
       } else status(`Done. ${esc(name)} is downloaded.${esc(note)}`, "ok");
     } catch (err) {
