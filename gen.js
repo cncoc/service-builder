@@ -357,7 +357,13 @@
     const rootRels = parseRels(await read("_rels/.rels")).filter((r) => !/app\.xml$/.test(r.target));
     zip.file("_rels/.rels", relsXml(rootRels));
 
-    const out = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 1 } });
+    // Write a clean package: files only (no folder entries, which stop Office opening or co-editing the file
+    // from cloud storage such as Google Drive) and [Content_Types].xml first, as Office itself writes it.
+    const clean = new JSZip();
+    const names = Object.keys(zip.files).filter((f) => !zip.files[f].dir);
+    names.sort((a, b) => (a === "[Content_Types].xml" ? -1 : b === "[Content_Types].xml" ? 1 : 0));
+    for (const f of names) clean.file(f, await zip.file(f).async("uint8array"), { createFolders: false });
+    const out = await clean.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 1 } });
     out.imports = importNotes;
     out.skipped = skipped;
     return out;
