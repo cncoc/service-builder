@@ -4,7 +4,8 @@
  * Presenter: shows a hymn's slides (or a chorus's) full screen straight away, for songs sung on the spot.
  *   Next: → ↓ Space Enter PageDown, a click/tap on the right, or a swipe left (clickers send PageDown).
  *   Back: ← ↑ PageUp Backspace, a tap on the left. 1–9 jump to that stanza, B or . blacks the screen,
- *   F toggles full screen, Esc stops. On a laptop with an extended projector screen it opens on the projector.
+ *   F toggles full screen, Esc stops. The bar's stanza buttons turn stanzas on and off while presenting.
+ *   On a laptop with an extended projector screen it can open on the projector.
  *
  * Created by index.html with what it needs from the builder:
  *   HymnViewer({ api, hymn(n), chorus(n), hymnSlides(item), picCache, ccli, add(kind, n, opts), locked() })
@@ -87,35 +88,37 @@
 
     /* ======================= Presenter ======================= */
     const P = { open: false };
-    const pel = document.createElement("dialog");
-    pel.className = "presenter"; pel.setAttribute("aria-label", "Presenting"); pel.tabIndex = -1;
+    // A plain full-window layer, not a <dialog>: Chrome won't put a modal dialog into full screen
+    const pel = document.createElement("div");
+    pel.className = "presenter"; pel.hidden = true; pel.tabIndex = -1;
+    pel.setAttribute("role", "dialog"); pel.setAttribute("aria-modal", "true"); pel.setAttribute("aria-label", "Presenting");
     pel.innerHTML = `<div class="p-stage" id="p-stage"></div>
       <div class="p-hud" id="p-hud">
         <button type="button" class="p-btn" data-p="close" aria-label="Stop presenting" title="Stop presenting (Esc)">✕</button>
         <div class="p-info"><b id="p-title"></b><span id="p-where"></span></div>
-        <div class="p-jump" id="p-jump"></div>
+        <div class="p-jump" id="p-jump" role="group" aria-label="Stanzas to show"></div>
         <button type="button" class="p-btn" data-p="prev" aria-label="Previous slide">◀</button>
         <button type="button" class="p-btn" data-p="next" aria-label="Next slide">▶</button>
         <button type="button" class="p-btn" data-p="black" aria-label="Black screen" title="Black screen (B)">◼</button>
-        <button type="button" class="p-btn" data-p="full" aria-label="Full screen" title="Full screen (F)">⛶</button>
+        <button type="button" class="p-btn" data-p="full" aria-label="Full screen" aria-pressed="false" title="Full screen (F)">⛶</button>
       </div>`;
     document.body.appendChild(pel);
     const stage = pel.querySelector("#p-stage"), hud = pel.querySelector("#p-hud");
 
     async function present(opts) {
       // opts: {title, kind:'hymn'|'chorus', n, seq, start, chorus}
-      Object.assign(P, opts, { i: Math.max(0, Math.min(opts.start || 0, opts.seq.length - 1)), black: false, open: true, wasFull: false });
+      Object.assign(P, { h: null, sel: null, chorus: null, error: "", note: "" }, opts,
+        { i: Math.max(0, Math.min(opts.start || 0, opts.seq.length - 1)), black: false, open: true, wasFull: false, leavingFull: false });
       P.seq = [...opts.seq, { type: "end" }];
       P.returnFocus = document.activeElement;
       pel.querySelector("#p-title").textContent = opts.title;
-      const codes = [...new Set(opts.seq.map((x) => x.code).filter(Boolean))];
-      pel.querySelector("#p-jump").innerHTML = codes.length > 1 ? codes.map((c) =>
-        `<button type="button" class="p-chip" data-jump="${c}" title="${stLabel(c)}">${c === "OE" ? "End" : c === "OI" ? "Intro" : Number(c)}</button>`).join("") : "";
-      if (!pel.open) pel.showModal();
+      renderPicker();
+      if (vel.open) { P.reopenViewer = true; vel.close(); } // the viewer is a dialog, which would sit on top
+      pel.hidden = false; setInert(true);
       pel.focus({ preventScroll: true }); // not the ✕ button, so Space and Enter move on instead of stopping
       document.body.classList.add("presenting");
       show(); wake(true);
-      goFull();
+      goFull(false);
       if (opts.kind === "hymn") {
         // The first slides come first so presenting can start at once; the rest follow in a second request
         const names = opts.seq.filter((x) => x.type === "pic").map((x) => x.name);
@@ -145,32 +148,87 @@
       stage.innerHTML = html;
       stage.classList.toggle("light", it.type === "page");
       const real = P.seq.length - 1;
-      pel.querySelector("#p-where").textContent = it.type === "end" ? "End" : P.black ? "Screen blacked out (B)" :
+      pel.querySelector("#p-where").textContent = P.note ? P.note : it.type === "end" ? "End" : P.black ? "Screen blacked out (B)" :
         `${it.code ? stLabel(it.code) + " · " : ""}${P.i + 1} of ${real}`;
-      pel.querySelectorAll("[data-jump]").forEach((b) => b.setAttribute("aria-current", String(it.code === b.dataset.jump)));
+      pel.querySelectorAll("[data-st]").forEach((b) => b.classList.toggle("cur", it.code === b.dataset.st));
       pel.querySelector('[data-p="black"]').setAttribute("aria-pressed", String(P.black));
     }
-    function go(i) { if (i < 0) i = 0; if (i >= P.seq.length) return close(); P.i = i; P.black = false; show(); }
+    function go(i) { if (i < 0) i = 0; if (i >= P.seq.length) return close(); P.i = i; P.black = false; P.note = ""; show(); }
     const next = () => go(P.i + 1), prev = () => go(P.i - 1);
     function jump(code) { const k = P.seq.findIndex((x) => x.code === code); if (k >= 0) go(k); }
+    function say(text) { P.note = text; show(); flashHud(); clearTimeout(P.noteTimer); P.noteTimer = setTimeout(() => { P.note = ""; if (P.open) show(); }, 5000); }
 
-    async function goFull() {
-      if (!pel.requestFullscreen || document.fullscreenElement) return;
-      let opt;
-      try { // a projector set up as a second ("extended") screen gets the slides; the laptop keeps nothing on top
-        if (window.screen.isExtended && "getScreenDetails" in window) {
-          const sd = await window.getScreenDetails();
-          const other = sd.screens.find((s) => s !== sd.currentScreen);
-          if (other) opt = { screen: other };
-        }
-      } catch (e) { /* not allowed: use this screen */ }
-      try { await pel.requestFullscreen(opt); P.wasFull = true; }
-      catch (e) { try { await pel.requestFullscreen(); P.wasFull = true; } catch (e2) { /* stays as a window-filling overlay */ } }
+    // Stanza picker in the bar: each stanza (and Intro/Ending) turns on or off; the slides follow at once
+    function renderPicker() {
+      const box = pel.querySelector("#p-jump");
+      if (!P.h) { box.innerHTML = ""; return; }
+      const h = P.h, s = P.sel;
+      const chip = (code, label, on) => `<button type="button" class="p-chip" data-st="${code}" aria-pressed="${on}" title="${stLabel(code)}: ${on ? "showing, tap to leave out" : "left out, tap to show"}">${label}</button>`;
+      box.innerHTML = (h.st.length > 1 || h.oi || h.oe ? `<span class="p-label">Stanzas</span>` : "") +
+        (h.oi ? chip("OI", "Intro", s.oi) : "") +
+        (h.st.length > 1 ? h.st.map((k) => chip(pad(k), k, s.st.includes(k))).join("") : "") +
+        (h.oe ? chip("OE", "End", s.oe) : "");
     }
+    function toggleStanza(code) {
+      const h = P.h, s = P.sel; if (!h) return;
+      P.note = "";
+      const cur = P.seq[P.i], atEnd = cur.type === "end";
+      if (code === "OE") s.oe = !s.oe;
+      else if (code === "OI") s.oi = !s.oi;
+      else {
+        const k = Number(code);
+        if (s.st.includes(k)) { if (s.st.length === 1) { say("At least one stanza has to stay in"); return; } s.st = s.st.filter((x) => x !== k); }
+        else s.st = [...s.st, k].sort((a, z) => a - z);
+      }
+      const seq = hymnSeq(h, s), all = hymnSeq(h, { st: h.st, oe: true, oi: true }).map((x) => x.name);
+      P.seq = [...seq, { type: "end" }];
+      if (atEnd) P.i = seq.length;
+      else {
+        // stay on the same slide; if its stanza was just left out, go to the next stanza still shown
+        const at = all.indexOf(cur.name);
+        let i = seq.findIndex((x) => x.name === cur.name);
+        if (i < 0) i = seq.findIndex((x) => all.indexOf(x.name) > at);
+        P.i = i < 0 ? Math.max(0, seq.length - 1) : i;
+      }
+      renderPicker(); show();
+      const missing = seq.map((x) => x.name).filter((nm) => !picCache.has(nm));
+      if (missing.length) loadPics(h.n, missing).then(() => { if (P.open) show(); }, () => {});
+    }
+
+    // Full screen hides the browser's tabs and address bar (and the taskbar) so only the slides show. On a laptop
+    // whose projector is set up as a second, "extended" screen, the slides go to the projector once Chrome has been
+    // allowed to use both screens; it asks the first time the ⛶ button is pressed.
+    async function goFull(asked) {
+      if (document.fullscreenElement) return true;
+      let opt;
+      if (window.screen.isExtended && "getScreenDetails" in window) {
+        let state = "prompt";
+        try { state = (await navigator.permissions.query({ name: "window-management" })).state; } catch (e) { /* older Chrome */ }
+        if (state === "granted" || asked) {
+          try { const sd = await window.getScreenDetails(); const other = sd.screens.find((x) => x !== sd.currentScreen); if (other) opt = { screen: other }; }
+          catch (e) { /* not allowed: use this screen */ }
+        }
+      }
+      if (pel.requestFullscreen) {
+        for (const o of opt ? [opt, undefined] : [undefined]) {
+          try { await pel.requestFullscreen(o); P.wasFull = true; return true; } catch (e) { /* try the next way */ }
+        }
+      }
+      if (asked) say(document.fullscreenEnabled === false || !pel.requestFullscreen
+        ? "This browser can't go full screen here (iPhones can't); turn the device sideways for the biggest slides"
+        : "Full screen didn't start. Press ⛶ or F once more");
+      return false;
+    }
+    function leaveFull() { P.leavingFull = true; document.exitFullscreen().catch(() => { P.leavingFull = false; }); }
     document.addEventListener("fullscreenchange", () => {
+      const full = !!document.fullscreenElement;
+      const b = pel.querySelector('[data-p="full"]');
+      b.setAttribute("aria-pressed", String(full)); b.title = full ? "Leave full screen (F); the slides keep showing" : "Full screen (F)";
+      b.setAttribute("aria-label", full ? "Leave full screen" : "Full screen");
       if (!P.open) return;
-      if (document.fullscreenElement === pel) P.wasFull = true;
-      else if (P.wasFull) close(); // Esc in full screen leaves full screen: treat it as stopping, like PowerPoint
+      if (full) { P.wasFull = true; return; }
+      if (P.leavingFull) { P.leavingFull = false; return; } // the ⛶ button: keep presenting in the window
+      if (P.wasFull) close(); // Esc in full screen: stop, like PowerPoint
     });
     async function wake(on) {
       try {
@@ -180,12 +238,14 @@
     }
     function close() {
       if (!P.open) return;
-      P.open = false; P.wasFull = false;
+      P.open = false; P.wasFull = false; P.leavingFull = false; clearTimeout(P.noteTimer);
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-      pel.close(); document.body.classList.remove("presenting"); wake(false);
+      pel.hidden = true; setInert(false); document.body.classList.remove("presenting"); wake(false);
+      if (P.reopenViewer) { P.reopenViewer = false; vel.showModal(); }
       if (P.returnFocus && P.returnFocus.focus) P.returnFocus.focus({ preventScroll: true });
     }
-    pel.addEventListener("cancel", (e) => { e.preventDefault(); close(); });
+    // While presenting, nothing behind the slides can be tabbed to or clicked
+    function setInert(on) { for (const el of document.body.children) if (el !== pel && el.tagName !== "SCRIPT") el.inert = on; }
 
     document.addEventListener("keydown", (e) => {
       if (!P.open || e.altKey || e.ctrlKey || e.metaKey) return;
@@ -197,7 +257,8 @@
       else if (k === "Escape") close();
       else if (k === "b" || k === "B" || k === "." || k === "w" || k === "W" || k === ",") { P.black = !P.black; show(); }
       else if (/^[1-9]$/.test(k)) jump(pad(k));
-      else if (k === "f" || k === "F" || k === "F5") goFull();
+      else if (k === "f" || k === "F") document.fullscreenElement ? leaveFull() : goFull(true);
+      else if (k === "F5") goFull(true);
       else return;
       e.preventDefault(); e.stopPropagation();
     }, true);
@@ -214,12 +275,13 @@
     });
     hud.addEventListener("click", (e) => {
       const b = e.target.closest("button"); if (!b) return;
-      if (b.dataset.jump) jump(b.dataset.jump);
-      else ({ close, prev, next, black: () => { P.black = !P.black; show(); }, full: () => (document.fullscreenElement ? document.exitFullscreen() : goFull()) })[b.dataset.p]();
+      if (b.dataset.st) toggleStanza(b.dataset.st);
+      else ({ close, prev, next, black: () => { P.black = !P.black; show(); }, full: () => (document.fullscreenElement ? leaveFull() : goFull(true)) })[b.dataset.p]();
       flashHud();
     });
     let hudTimer = null;
-    function flashHud() { pel.classList.add("hud-on"); clearTimeout(hudTimer); hudTimer = setTimeout(() => { if (!hud.matches(":hover")) pel.classList.remove("hud-on"); }, 2600); }
+    function flashHud(ms = 2600) { pel.classList.add("hud-on"); clearTimeout(hudTimer); hudTimer = setTimeout(() => { if (!hud.matches(":hover")) pel.classList.remove("hud-on"); }, ms); }
+    hud.addEventListener("pointerdown", () => flashHud(5000));
     pel.addEventListener("pointermove", (e) => { if (e.pointerType === "mouse") flashHud(); });
 
     /* ======================= Viewer ======================= */
@@ -439,7 +501,8 @@
       const h = hymn(n); if (!h) return;
       sel = sel || { st: [...h.st], oe: h.oe > 0, oi: false };
       player.pause();
-      present({ title: `${h.n} ${h.t}`, kind: "hymn", n: h.n, seq: hymnSeq(h, sel), start });
+      sel = { st: [...sel.st], oe: !!sel.oe, oi: !!sel.oi };
+      present({ title: `${h.n} ${h.t}`, kind: "hymn", n: h.n, h, sel, seq: hymnSeq(h, sel), start });
     }
     function presentChorus(n, start = 0) {
       const c = chorus(n); if (!c) return;

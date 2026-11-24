@@ -10,7 +10,8 @@ Published with GitHub Pages: Settings → Pages → Deploy from a branch → `ma
 
 Tap a hymn's title to open it: **Slides**, **Page** (the full hymnal page), **Words** and **Play** (the hymn's MIDI, with
 tempo, voice parts and starting pitch). **▶ Present** shows a hymn or chorus full screen straight away, for songs sung on
-the spot. Keys: → / Space / PageDown next, ← / PageUp back, 1–9 jump to a stanza, B black screen, F full screen, Esc stop.
+the spot. The stanza buttons in the bar at the bottom turn stanzas on and off while presenting. Keys: → / Space / PageDown
+next, ← / PageUp back, 1–9 jump to a stanza, B black screen, F full screen on/off, Esc stop.
 
 Words, music and pages come from the church Apps Script's `media` action (`apps-script/Media.gs`), which reads
 `hymn-media.json` and the `Hymn Pages` folder on the church Drive. Slides and presenting work without it.
