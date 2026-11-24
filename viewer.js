@@ -291,6 +291,7 @@
       <header class="v-head"><span class="v-num" id="v-num"></span><div class="v-titles"><h2 id="v-title"></h2><div class="v-sub" id="v-sub"></div></div>
         <button type="button" class="v-close" id="v-close" aria-label="Close">✕</button></header>
       <div class="v-bar"><div class="chips" id="v-chips"></div>
+        <div class="v-mini-wrap" id="v-mini-wrap"><button type="button" class="btn v-mini" id="v-mini" aria-label="Play the music">▶ Play</button><span class="v-mini-time" id="v-mini-time"></span></div>
         <div class="v-actions"><button type="button" class="btn" id="v-add">Add to service</button>
           <button type="button" class="btn btn-primary v-present" id="v-present">▶ Present</button></div></div>
       <div class="tabs v-tabs" role="tablist" id="v-tabs"></div>
@@ -317,6 +318,8 @@
     function openDialog() {
       const isH = V.kind === "hymn", x = isH ? hymn(V.n) : chorus(V.n);
       $v("#v-num").textContent = x.n; $v("#v-num").classList.toggle("ch", !isH);
+      $v("#v-mini-wrap").hidden = !isH;
+      miniMsg = ""; refresh();
       $v("#v-title").textContent = x.t;
       $v("#v-sub").textContent = isH ? `Songs of Faith and Praise · ${x.st.length} stanza${x.st.length > 1 ? "s" : ""}${x.rf ? " · refrain" : ""}` : `CNCOC Songbook chorus${x.ref ? " · " + x.ref : ""}`;
       const tabs = isH ? [["slides", "Slides"], ["page", "Page"], ["words", "Words"], ["play", "Play"]] : [["slides", "Slides"], ["words", "Words"]];
@@ -335,11 +338,13 @@
         (h.oe ? `<button type="button" class="chip opt" data-vopt="oe" aria-pressed="${s.oe}">Ending</button>` : "");
       $v("#v-present").disabled = !s.st.length;
     }
+    let renderSeq = 0;
     function renderTab() {
       vel.querySelectorAll("[data-vtab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.vtab === V.tab)));
       const body = $v("#v-body"), n = V.n, kind = V.kind;
-      body.dataset.tab = V.tab;
-      const still = () => vel.open && V.n === n && V.kind === kind && body.dataset.tab === V.tab;
+      body.dataset.tab = V.tab; tabUpdate = tabFrame = null;
+      const token = ++renderSeq; // anything that arrives after the tab or hymn has changed is dropped
+      const still = () => vel.open && token === renderSeq && V.n === n && V.kind === kind;
       if (V.tab === "slides") return slidesTab(body, still);
       if (V.tab === "page") return pageTab(body, still);
       if (V.tab === "words") return wordsTab(body, still);
@@ -420,7 +425,36 @@
     /* ----- Play ----- */
     const PART = ["", "Soprano", "Alto", "Tenor", "Bass"];
     const fmt = (s) => `${Math.floor(s / 60)}:${pad(Math.floor(s % 60))}`;
-    let raf = 0;
+    // One player for the viewer: the small Play button in the bar works from any tab (e.g. reading the Page
+    // while listening), and the Play tab shows the full controls. Both follow the player's state.
+    let raf = 0, tabUpdate = null, tabFrame = null, miniBusy = false, miniMsg = "";
+    function refresh() { updateMini(); if (tabUpdate) tabUpdate(); cancelAnimationFrame(raf); frame(); }
+    function frame() {
+      const pos = player.position();
+      $v("#v-mini-time").textContent = miniMsg || (player.song && (player.playing || pos > 0) ? `${fmt(pos)} / ${fmt(player.song.duration)}` : "");
+      if (tabFrame) tabFrame(pos);
+      if (player.playing) raf = requestAnimationFrame(frame);
+    }
+    function updateMini() {
+      const b = $v("#v-mini");
+      b.textContent = player.playing ? "❚❚ Pause" : miniBusy || player.sound === "loading" ? "Loading…" : "▶ Play";
+      b.setAttribute("aria-label", player.playing ? "Pause the music" : "Play the music");
+      b.setAttribute("aria-pressed", String(player.playing));
+    }
+    player.onchange = refresh;
+    async function playPause() {
+      if (player.playing) { player.pause(); return; }
+      const n = V.n; miniBusy = true; miniMsg = ""; updateMini();
+      try {
+        const w = await media(n);
+        if (V.n !== n || !vel.open) return;
+        if (player.song !== w.song) player.load(w.song);
+        await player.play();
+      } catch (e) {
+        miniMsg = e.locked ? "" : /unknown action/i.test(e.message || "") ? "Music needs the church script update" : "Couldn't play: " + (e.message || e);
+        if (e.locked) locked();
+      } finally { miniBusy = false; refresh(); }
+    }
     function playTab(body, still) {
       const h = hymn(V.n);
       body.innerHTML = `<div class="v-wait">Loading the music…</div>`;
@@ -444,14 +478,12 @@
             <span class="v-hint">${key ? `Key of ${esc(M.prettyKey(key))} · ` : ""}opening notes: ${esc(opening)}</span></div>
           <p class="v-hint" id="pl-sound"></p>${ios ? `<p class="v-hint">No sound on an iPhone or iPad? Check the silent switch is off.</p>` : ""}</div>`;
         const book = (w.credit || {}).tempo;
-        const tick = () => {
-          if (!still()) { cancelAnimationFrame(raf); return; }
-          const pos = player.position();
+        tabFrame = (pos) => {
+          if (!still()) return;
           body.querySelector("#pl-time").textContent = fmt(pos);
           const sk = body.querySelector("#pl-seek"); if (!sk.matches(":active")) sk.value = pos.toFixed(2);
-          if (player.playing) raf = requestAnimationFrame(tick);
         };
-        player.onchange = () => {
+        tabUpdate = () => {
           if (!still()) return;
           const go = body.querySelector("#pl-go");
           go.textContent = player.playing ? "❚❚ Pause" : player.sound === "loading" ? "Loading…" : "▶ Play";
@@ -459,9 +491,8 @@
           body.querySelector("#pl-bpm").textContent = `${Math.round(player.rate * 100)}% speed${book ? ` · hymnal marking ${book}` : ""}`;
           body.querySelector("#pl-sound").textContent = player.sound === "tone" ? "Sound: a simple built-in tone (the piano sound couldn't be loaded)." : player.sound === "loading" ? "Loading the piano sound…" : "";
           body.querySelectorAll("[data-part]").forEach((b) => b.setAttribute("aria-pressed", String(!player.muted.has(+b.dataset.part))));
-          cancelAnimationFrame(raf); tick();
         };
-        player.onchange();
+        refresh();
       }, (e) => { if (still()) body.innerHTML = `<p class="v-err">${why(e)}</p>`; });
     }
 
@@ -479,7 +510,7 @@
       if (b.id === "v-add") { add(V.kind, V.n, V.kind === "hymn" ? { ...V.sel, st: [...V.sel.st] } : null); closeViewer(); return; }
       if (b.dataset.pagefull != null) { page(V.n).then((u) => present({ title: `${h.n} ${h.t}`, kind: "page", n: h.n, seq: [{ type: "page", url: u }] }), () => {}); return; }
       if (b.tagName === "IMG" && b.closest(".v-page")) { b.closest(".v-page").classList.toggle("zoom"); return; }
-      if (b.id === "pl-go") { player.playing ? player.pause() : player.play().catch((err) => alertIn(err)); return; }
+      if (b.id === "pl-go" || b.id === "v-mini") { playPause(); return; }
       if (b.id === "pl-pitch") { player.pitch().catch((err) => alertIn(err)); return; }
       if (b.id === "pl-rate0") { player.setRate(1); vel.querySelector("#pl-rate").value = 100; return; }
       if (b.dataset.part != null) { const i = +b.dataset.part; player.setMuted(i, !player.muted.has(i)); return; }

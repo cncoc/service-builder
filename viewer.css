@@ -32,6 +32,10 @@
 .v-close:hover { background: var(--sunk); color: var(--ink); }
 .v-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 0 16px 10px; }
 .v-actions { display: flex; gap: 8px; margin-left: auto; }
+.v-mini-wrap { display: flex; align-items: center; gap: 10px; }
+.v-mini { min-width: 104px; border-color: var(--cloth); color: var(--cloth); }
+.v-mini[aria-pressed="true"] { background: var(--cloth); color: var(--cloth-ink); }
+.v-mini-time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .9rem; }
 .v-present { min-width: 128px; font-size: 1.02rem; }
 .v-present[disabled] { opacity: .5; cursor: not-allowed; }
 .v-tabs { padding: 0 12px; }
