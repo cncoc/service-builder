@@ -212,6 +212,7 @@ h1, h2 { margin: 0; text-wrap: balance; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
+<link rel="stylesheet" href="viewer.css">
 </head>
 <body>
 
@@ -292,6 +293,8 @@ h1, h2 { margin: 0; text-wrap: balance; }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
 <script src="deck-data.js"></script>
 <script src="gen.js"></script>
+<script src="midi-player.js"></script>
+<script src="viewer.js"></script>
 <script>
 (() => {
   /* ---------- Settings ---------- */
@@ -628,6 +631,7 @@ h1, h2 { margin: 0; text-wrap: balance; }
     down: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
     x: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     swap: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h13l-3-3M20 17H7l3 3"/></svg>',
+    play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>',
   };
   function renderResults() {
     const active = state.items.find((x) => x.id === state.active);
@@ -638,8 +642,9 @@ h1, h2 { margin: 0; text-wrap: balance; }
       $("#results").innerHTML = list.length ? list.map((h) => `
         <li class="res" data-kind="hymn" data-n="${h.n}">
           <span class="num">${h.n}</span>
-          <span style="min-width:0"><div class="t">${esc(h.t)}</div><div class="fl">${esc(h.fl)}</div>
-            <div class="meta">${h.st.length} stanza${h.st.length > 1 ? "s" : ""}${h.rf ? " · refrain" : ""}${h.oe ? " · optional ending" : ""}${h.oi ? " · optional intro" : ""}</div></span>
+          <button type="button" class="res-open" data-open="${h.n}" aria-label="Open hymn ${h.n}, ${esc(h.t)}: slides, page, words and music"><div class="t">${esc(h.t)}</div><div class="fl">${esc(h.fl)}</div>
+            <div class="meta">${h.st.length} stanza${h.st.length > 1 ? "s" : ""}${h.rf ? " · refrain" : ""}${h.oe ? " · optional ending" : ""}${h.oi ? " · optional intro" : ""}</div></button>
+          <button type="button" class="pbtn" data-present="${h.n}" aria-label="Present hymn ${h.n} now" title="Present now">▶<span class="pl"> Present</span></button>
           <button type="button" class="add" data-add="${h.n}">${verb}</button>
         </li>`).join("") : `<li class="empty-res">No hymn matches “${esc(q)}”. Try the number, a different word, or the first line.</li>`;
     } else {
@@ -647,8 +652,9 @@ h1, h2 { margin: 0; text-wrap: balance; }
       $("#results").innerHTML = list.length ? list.map((c) => `
         <li class="res" data-kind="chorus" data-n="${c.n}">
           <span class="num ch">${c.n}</span>
-          <span style="min-width:0"><div class="t">${esc(c.t)}${c.ref ? ` <span class="meta">${esc(c.ref)}</span>` : ""}</div><div class="fl">${esc(c.fl)}</div>
-            <div class="meta">${c.slides.length} slide${c.slides.length > 1 ? "s" : ""}</div></span>
+          <button type="button" class="res-open" data-openc="${c.n}" aria-label="Open chorus ${c.n}, ${esc(c.t)}"><div class="t">${esc(c.t)}${c.ref ? ` <span class="meta">${esc(c.ref)}</span>` : ""}</div><div class="fl">${esc(c.fl)}</div>
+            <div class="meta">${c.slides.length} slide${c.slides.length > 1 ? "s" : ""}</div></button>
+          <button type="button" class="pbtn" data-presentc="${c.n}" aria-label="Present chorus ${c.n} now" title="Present now">▶<span class="pl"> Present</span></button>
           <button type="button" class="add" data-addc="${c.n}">${verb}</button>
         </li>`).join("") : `<li class="empty-res">No chorus matches “${esc(q)}”. Try the songbook number or a word from the chorus.</li>`;
     }
@@ -674,6 +680,7 @@ h1, h2 { margin: 0; text-wrap: balance; }
       <button type="button" class="icon" data-act="down" aria-label="Move down">${ICON.down}</button>
       <button type="button" class="icon" data-act="remove" aria-label="Remove">${ICON.x}</button>`;
     const swap = `<button type="button" class="icon" data-act="pick" aria-label="Change">${ICON.swap}</button>`;
+    const play = `<button type="button" class="icon play" data-act="present" aria-label="Present now" title="Present now">${ICON.play}</button>`;
     const grip = `<span class="grip" aria-hidden="true">${ICON.grip}</span>`;
     const miss = it.missing ? " is-missing" : "";
     if (it.kind === "hymn") {
@@ -683,16 +690,16 @@ h1, h2 { margin: 0; text-wrap: balance; }
         + (h.oe ? `<button type="button" class="chip opt" data-act="oe" aria-pressed="${it.oe}">Ending</button>` : "");
       const n = counts.per.get(it.id);
       return `<li class="card${it.st.length ? "" : " is-missing"}${state.active === it.id ? " is-active" : ""}" data-id="${it.id}">${grip}<span class="hnum">${h.n}</span>
-        <div class="body"><div class="ttl">${esc(h.t)}</div>
+        <div class="body"><button type="button" class="ttl-btn" data-act="view" aria-label="Open hymn ${h.n}, ${esc(h.t)}: slides, page, words and music">${esc(h.t)}</button>
           <div class="chips"><span class="label">Stanzas</span>${chips}${opts ? '<span class="sep"></span>' + opts : ""}</div>
           <div class="sub">${it.st.length ? `${n} slide${n === 1 ? "" : "s"}` : "Choose at least one stanza"}${h.rf ? " · refrain included with each stanza" : ""}</div></div>
-        <div class="tools">${swap}${tools}</div></li>`;
+        <div class="tools">${it.st.length ? play : ""}${swap}${tools}</div></li>`;
     }
     if (it.kind === "chorus") {
       const c = CH.get(it.n), n = c.slides.length;
       return `<li class="card${state.active === it.id ? " is-active" : ""}" data-id="${it.id}">${grip}<span class="hnum ch"><small>Chorus</small>${c.n}</span>
-        <div class="body"><div class="ttl">${esc(c.t)}</div><div class="sub">${n} slide${n === 1 ? "" : "s"} · ${esc(c.fl)}</div></div>
-        <div class="tools">${swap}${tools}</div></li>`;
+        <div class="body"><button type="button" class="ttl-btn" data-act="view" aria-label="Open chorus ${c.n}, ${esc(c.t)}">${esc(c.t)}</button><div class="sub">${n} slide${n === 1 ? "" : "s"} · ${esc(c.fl)}</div></div>
+        <div class="tools">${play}${swap}${tools}</div></li>`;
     }
     if (it.kind === "slot" || it.kind === "cslot") {
       const act = state.active === it.id, word = it.kind === "slot" ? "hymn" : "chorus";
@@ -787,8 +794,11 @@ h1, h2 { margin: 0; text-wrap: balance; }
   function wire() {
     document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
     $("#results").addEventListener("click", (e) => {
-      const b = e.target.closest("[data-add]"), c = e.target.closest("[data-addc]");
-      if (b) addHymn(+b.dataset.add); else if (c) addChorus(+c.dataset.addc);
+      const b = e.target.closest("button"); if (!b) return;
+      const d = b.dataset;
+      if (d.add) addHymn(+d.add); else if (d.addc) addChorus(+d.addc);
+      else if (d.present) viewer.presentHymn(+d.present); else if (d.presentc) viewer.presentChorus(+d.presentc);
+      else if (d.open) viewer.openHymn(+d.open); else if (d.openc) viewer.openChorus(+d.openc);
     });
     $("#palette").addEventListener("click", (e) => {
       const b = e.target.closest("[data-paladd]"); if (!b) return;
@@ -839,6 +849,12 @@ h1, h2 { margin: 0; text-wrap: balance; }
       const b = e.target.closest("[data-act]"); if (!b || b.dataset.act === "ref" || b.dataset.act === "file") return;
       const card = b.closest("[data-id]"); const i = state.items.findIndex((x) => x.id === card.dataset.id); const it = state.items[i];
       switch (b.dataset.act) {
+        case "view":
+          if (it.kind === "hymn") viewer.openHymn(it.n, { st: it.st, oe: it.oe, oi: it.oi }); else viewer.openChorus(it.n);
+          return;
+        case "present":
+          if (it.kind === "hymn") viewer.presentHymn(it.n, { st: [...it.st], oe: it.oe, oi: it.oi }); else viewer.presentChorus(it.n);
+          return;
         case "unfile":
           if (confirm(`Remove ${attachmentFor(it).name} from this service? It goes to the church Drive's bin.`)) removeFile(it);
           return;
@@ -884,7 +900,7 @@ h1, h2 { margin: 0; text-wrap: balance; }
       },
     });
     for (const sel of ["#results", "#palette"]) {
-      Sortable.create($(sel), { group: { name: "svc", pull: "clone", put: false }, sort: false, animation: 150, filter: "button", preventOnFilter: false, delay: 150, delayOnTouchOnly: true });
+      Sortable.create($(sel), { group: { name: "svc", pull: "clone", put: false }, sort: false, animation: 150, filter: ".add, .pbtn, [data-paladd]", preventOnFilter: false, delay: 150, delayOnTouchOnly: true });
     }
     $("#generate").addEventListener("click", generate);
     $("#generate-m").addEventListener("click", () => { setView("order"); generate(); });
@@ -990,7 +1006,7 @@ h1, h2 { margin: 0; text-wrap: balance; }
   }
 
   /* ---------- Start ---------- */
-  let started = false;
+  let started = false, viewer = null;
   async function start(data) {
     if (started) { $("#gate").hidden = true; $("#app").hidden = false; $("#mbar").hidden = false; return; }
     started = true;
@@ -1000,6 +1016,11 @@ h1, h2 { margin: 0; text-wrap: balance; }
       const words = c.slides.flat().flatMap((b) => b.lines);
       return [c.number, { n: c.number, t: c.title, ref: c.ref, slides: c.slides, fl: words[0] || "", s: norm(`${c.number} ${c.title} ${c.ref} ${words.join(" ")}`) }];
     }));
+    viewer = window.HymnViewer({
+      api, hymn: (n) => H.get(n), chorus: (n) => CH.get(n), hymnSlides, picCache, ccli: CONFIG.ccli,
+      add: (kind, n, opts) => { if (kind === "hymn") place({ ...mk.hymn(n), ...(opts || {}) }, "slot"); else place(mk.chorus(n), "cslot"); },
+      locked: () => showGate(null, "The access code has changed. Open the Service Builder again from the members' page."),
+    });
     $("#gate").hidden = true; $("#app").hidden = false; $("#mbar").hidden = false;
     state = { service: "sunday", date: nextDay(0), items: [], active: null, version: 0, attachments: {} };
     wire(); renderPalette(); setTab("hymns");
